@@ -1,3 +1,6 @@
+from audiotsm import wsola
+from audiotsm.io.array import ArrayReader, ArrayWriter
+import librosa
 import numpy as np
 from numpy import fft
 import math
@@ -7,14 +10,47 @@ from pysptk import conversion
 import pyworld as pw
 from scipy.io import wavfile
 
+def encode_32to16bits(data):
+    assert data.dtype == "float32", "input data is not 32bits"
+    if (np.max(np.abs(data)) < 1.0):
+        data = np.clip(data * 2**15, -2**15, 2**15 - 1).astype(np.int16)
+    else:
+        data = data.astype(np.int16)
+    return data
+
+def encode_16to32bits(data):
+    assert data.dtype == "int16", "input data is not 16bits"
+    if (np.max(np.abs(data)) > 1.0):
+        data = np.clip(data / 2**15, -1, 1).astype(np.float32)
+    else:
+        data = data.astype(np.float32)
+    return data
+
 def read_data(path):
     fs, data = wavfile.read(path)
-    data = data.astype(np.float)    # floatでないとworldは扱えない
+    data = encode_16to32bits(data)
+    # data = data.astype(np.float)    # floatでないとworldは扱えない
     return data, fs
 
 def save_wav(wav, fs, path):
-    wav *= 32767 / max(0.01, np.max(np.abs(wav)))
+    wav = encode_32to16bits(wav)
+    # wav *= 32767 / max(0.01, np.max(np.abs(wav)))
     wavfile.write(path+".wav", fs, wav.astype(np.int16))
+
+def time_stretch(data, speed):
+    assert data.dtype == "float32", "data type error"
+
+    data = data[:].reshape(1, -1)
+
+    reader = ArrayReader(data)
+    writer = ArrayWriter(channels=1)
+    tsm = wsola(channels=1, speed=speed)
+    tsm.run(reader, writer)
+
+    output = np.ascontiguousarray(writer.data.T)
+    output = output.flatten()
+
+    return output
 
 def get_para(data, fs):
     # This function is the same as wav2world.

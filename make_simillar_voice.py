@@ -1,22 +1,72 @@
+import numpy as np
 import os
 from pathlib import Path
+import sox
 
+import utils.path_utils as pu
 import utils.SignalProcessingTools as spt
 
 def add_noise(data, noise, para):
+    #Todo change shape
     return data + noise * para
+
+def sox_resampling(input_path, output_path, SAMPLINGRATE=48000):
+    transformer = sox.Transformer()
+    transformer.rate(samplerate=SAMPLINGRATE)
+    transformer.build(input_path, output_path)
+
+def sox_timestretch(input_path, name, FACTOR=1.0):
+    assert FACTOR != 1.0, "please set FACTOR"
+    name = name + "_stretch" + str(FACTOR) + ".wav"
+    output_path = os.path.join("./output", name)
+    if not (os.path.isfile(output_path)):
+        transformer = sox.Transformer()
+        transformer.tempo(factor=FACTOR)
+        transformer.build(input_path, output_path)
+    data, fs = spt.read_data(output_path)
+    return data
+
+def sox_pitchshift(input_path, name, PITCHSHIFT=0.0):
+    assert PITCHSHIFT != 0.0, "please set PITCHSHIFT"
+    name = name + "_pitch" + str(PITCHSHIFT) + ".wav"
+    output_path = os.path.join("./output", name)
+    if not (os.path.isfile(output_path)):
+        transformer = sox.Transformer()
+        transformer.pitch(n_semitones=PITCHSHIFT)
+        transformer.build(input_path, output_path)
+    data, fs = spt.read_data(output_path)
+    return data
+
+def sox_lpf(input_path, name, frequency = None):
+    assert frequency != None, "please chande frequency"
+    name = name + "_lpf" + str(frequency) + ".wav"
+    output_path = os.path.join("./output", name)
+    if not (os.path.isfile(output_path)):
+        transformer = sox.Transformer()
+        transformer.lowpass(frequency=frequency)
+        transformer.build(input_path, output_path)
+    data, fs = spt.read_data(output_path)
+    return data
 
 def make_similer_voice(signal_path, noise_path):
     assert os.path.isfile(signal_path)
     assert os.path.isfile(noise_path)
 
+    signal_name = pu.get_filename(signal_path)
+    # data = sox_timestretch(signal_path, signal_name, FACTOR=0.75)
+    # data = sox_pitchshift(signal_path, signal_name, PITCHSHIFT=-3.0)
+    # data = sox_lpf(signal_path, signal_name, frequency=1000)
+
     data, fs = spt.read_data(signal_path)
     noise_data, fs_n = spt.read_data(noise_path)
 
-    # Todo resampling
+    if fs != fs_n:
+        name = os.path.basename(noise_path)
+        noise_path = os.path.join("./output", name)
+        if not(os.path.isfile(noise_path)):
+            sox_resampling(noise_path, noise_path)
+        noise_data, fs_n = spt.read_data(noise_path)
     assert fs == fs_n
-
-    # Todo data augment(stretch, pitch change)
 
     add_noise(data, noise_data, 0.3)
 
