@@ -83,7 +83,7 @@ def plot_spectrogram(data, title=None, fs=48000, n_fft=2048, hop_length=512, sav
     plt.colorbar(format='%+2.0f dB')
     plt.tight_layout()
     if save == True:
-        assert title == None, "please type title."
+        assert title != None, "please type title."
         cd = os.path.abspath(".")
         path = cd + "/output/" + title + ".png"
         plt.savefig(path)
@@ -105,6 +105,15 @@ def plot_ELVoice(el_path):
 
     pass
 
+def remove_middleman_interval(intervals):
+    if intervals.shape[0] == 1:
+        return intervals
+    else:
+        interval = np.zeros((1, 2))
+        interval[0, 0] = intervals[0, 0]
+        interval[0, 1] = intervals[-1, 1]
+        return interval
+
 def make_similer_voice():
     pass
 
@@ -122,13 +131,11 @@ def preliminary_experiment(signal_path, noise_path):
     if fs != fs_n:
         noise_data = sox_resampling(noise_path, fs)
 
-    # test
-    # Todo 無音区間の削除
-    # 切りたいのは音声の前後のみ（≠音声中）
-
-    # intervals = librosa.effects.split(data, top_db=43)
-    # data = librosa.effects.remix(data, intervals)
-    plot_spectrogram(data, save=False)
+    # 前後の無音の削除　要db閾値検討
+    intervals = librosa.effects.split(data, top_db=40)
+    interval = remove_middleman_interval(intervals)
+    data = librosa.effects.remix(data, interval)
+    # plot_spectrogram(data, save=False)
 
 
     plot_spectrogram(data, "natural voice_" + signal_name)
