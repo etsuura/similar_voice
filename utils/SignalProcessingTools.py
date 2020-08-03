@@ -67,12 +67,16 @@ def path2param(path):
     fo = pw.stonemask(data, _fo, _time, fs)  # 基本周波数の修正
     sp = pw.cheaptrick(data, fo, _time, fs)  # スペクトル包絡の抽出
     ap = pw.d4c(data, fo, _time, fs)  # 非周期性指標の抽出
-    return fo, sp, ap
+    return fo, sp, ap, fs
 
 def synthesize(fo, sp, ap, fs):
     synthesized = pw.synthesize(fo, sp, ap, fs) # 音声合成
-    synthesized = synthesized.astype(np.int16)  # 自動で型変換する関数作りたい
+    # synthesized = synthesized.astype(np.int16)  # 自動で型変換する関数作りたい
     return synthesized
+
+def path2synth_voice(path):
+    fo, sp, ap, fs = path2param(path)
+    return synthesize(fo, sp, ap, fs)
 
 def synthesize_write(filename, fo, sp, ap, fs):
     synth_voice = synthesize(fo, sp, ap, fs)

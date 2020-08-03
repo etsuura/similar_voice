@@ -1,6 +1,10 @@
+import librosa as librosa
+import librosa.display
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 from pathlib import Path
+import scipy
 import sox
 
 import utils.path_utils as pu
@@ -66,8 +70,45 @@ def sox_lpf(input_path, name, frequency = None):
 def lpf():
     pass
 
+def _spectrogram(data, n_fft=2048, hop_length=512):
+    # Calculate the spectrogram as the square of the complex magnitude of the STFT
+    spectrogram_librosa = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length, win_length=n_fft, window='hann')) ** 2
+    spectrogram_librosa_db = librosa.power_to_db(spectrogram_librosa, ref=np.max)
+    return spectrogram_librosa_db
 
-def make_similer_voice(signal_path, noise_path):
+def plot_spectrogram(data, title=None, fs=48000, n_fft=2048, hop_length=512, save=True):
+    spectrogram_librosa_db = _spectrogram(data, n_fft, hop_length)
+    librosa.display.specshow(spectrogram_librosa_db, sr=fs, y_axis='log', x_axis='time', hop_length=hop_length)
+    plt.title(title)
+    plt.colorbar(format='%+2.0f dB')
+    plt.tight_layout()
+    if save == True:
+        assert title == None, "please type title."
+        cd = os.path.abspath(".")
+        path = cd + "/output/" + title + ".png"
+        plt.savefig(path)
+    else:
+        plt.show()
+    plt.clf()       #グラフの初期化、初期化しないとカラーバーが複数並ぶなどある
+
+def plot_ELVoice(el_path):
+    assert os.path.isfile(el_path)
+
+    signal_name = pu.get_filename(el_path)
+    data, fs = spt.read_data(el_path)
+    if fs != 48000:
+        noise_data = sox_resampling(el_path, fs)
+    plot_spectrogram(data, "EL voice_" + signal_name)
+
+    el_synthesised = spt.path2synth_voice(el_path)
+    plot_spectrogram(el_synthesised, "EL voice_synthesised_" + signal_name)
+
+    pass
+
+def make_similer_voice():
+    pass
+
+def preliminary_experiment(signal_path, noise_path):
     assert os.path.isfile(signal_path)
     assert os.path.isfile(noise_path)
 
@@ -81,10 +122,36 @@ def make_similer_voice(signal_path, noise_path):
     if fs != fs_n:
         noise_data = sox_resampling(noise_path, fs)
 
+    # test
+    # Todo 無音区間の削除
+    # 切りたいのは音声の前後のみ（≠音声中）
+
+    # intervals = librosa.effects.split(data, top_db=43)
+    # data = librosa.effects.remix(data, intervals)
+    plot_spectrogram(data, save=False)
+
+
+    plot_spectrogram(data, "natural voice_" + signal_name)
+    plot_spectrogram(noise_data, "noise")
+
     add_signal = add_noise(data, noise_data, 0.3)
+    plot_spectrogram(add_signal, "NV add noise" + signal_name)
+    save_path = "./output/" + signal_name + "_add_noise"
+    spt.save_wav(add_signal, fs, save_path)
+
+    syth_nv = spt.path2synth_voice(signal_path)
+    plot_spectrogram(syth_nv, "synth_nv")
+
+    syth_nv_add_noise = spt.path2synth_voice(save_path + ".wav")
+    plot_spectrogram(syth_nv_add_noise, "synth_nv_add_noise")
+
+
+    # 後処理
+    # spt.save_wav(add_signal, fs, "./output/ns100.014_add_noise")
     # add_signal = lpf(add_signal, )
 
     pass
+
 
 def main():
     dataset_path = Path(__file__).parent
@@ -93,8 +160,8 @@ def main():
     ns_path = os.path.join(dataset_path, "sp543mic/ns100.014.wav")
     noise_path = os.path.join(dataset_path, "LPC_noise/ongen_14.wav")
 
-
-    make_similer_voice(ns_path, noise_path)
+    # plot_ELVoice(el_path)
+    preliminary_experiment(ns_path, noise_path)
 
 if __name__ == '__main__':
     main()
