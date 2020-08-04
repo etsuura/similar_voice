@@ -1,14 +1,17 @@
 import librosa as librosa
 import librosa.display
 import matplotlib.pyplot as plt
+import multiprocessing
 import numpy as np
 import os
+import pathlib
 from pathlib import Path
 import scipy
 import sox
 
 import utils.path_utils as pu
 import utils.SignalProcessingTools as spt
+
 
 def noise_cut(data, noise):
     assert data.shape[0] < noise.shape[0], "noise size is short."
@@ -19,9 +22,11 @@ def noise_cut(data, noise):
         cut_noise = noise[:data.shape[0]]
     return cut_noise
 
+
 def add_noise(data, noise, amplitude=1.0):
     cut_noise = noise_cut(data, noise)
     return data + cut_noise * amplitude
+
 
 def sox_resampling(input_path, SAMPLINGRATE=48000):
     name = os.path.basename(input_path)
@@ -34,6 +39,7 @@ def sox_resampling(input_path, SAMPLINGRATE=48000):
     assert fs == SAMPLINGRATE
     return data
 
+
 def sox_timestretch(input_path, name, FACTOR=1.0):
     assert FACTOR != 1.0, "please set FACTOR"
     name = name + "_stretch" + str(FACTOR) + ".wav"
@@ -44,6 +50,7 @@ def sox_timestretch(input_path, name, FACTOR=1.0):
         transformer.build(input_path, output_path)
     data, fs = spt.read_data(output_path)
     return data
+
 
 def sox_pitchshift(input_path, name, PITCHSHIFT=0.0):
     assert PITCHSHIFT != 0.0, "please set PITCHSHIFT"
@@ -56,7 +63,8 @@ def sox_pitchshift(input_path, name, PITCHSHIFT=0.0):
     data, fs = spt.read_data(output_path)
     return data
 
-def sox_lpf(input_path, name, frequency = None):
+
+def sox_lpf(input_path, name, frequency=None):
     assert frequency != None, "please chande frequency"
     name = name + "_lpf" + str(frequency) + ".wav"
     output_path = os.path.join("./output", name)
@@ -67,16 +75,20 @@ def sox_lpf(input_path, name, frequency = None):
     data, fs = spt.read_data(output_path)
     return data
 
+
 def lpf():
     pass
 
+
 def _spectrogram(data, n_fft=2048, hop_length=512):
     # Calculate the spectrogram as the square of the complex magnitude of the STFT
-    spectrogram_librosa = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length, win_length=n_fft, window='hann')) ** 2
+    spectrogram_librosa = np.abs(
+        librosa.stft(data, n_fft=n_fft, hop_length=hop_length, win_length=n_fft, window='hann')) ** 2
     spectrogram_librosa_db = librosa.power_to_db(spectrogram_librosa, ref=np.max)
     return spectrogram_librosa_db
 
-def plot_spectrogram(data, title=None, fs=48000, n_fft=2048, hop_length=512, save=True):
+
+def plot_spectrogram(data, title=None, output_path=None, fs=48000, n_fft=2048, hop_length=512, save=True):
     spectrogram_librosa_db = _spectrogram(data, n_fft, hop_length)
     librosa.display.specshow(spectrogram_librosa_db, sr=fs, y_axis='log', x_axis='time', hop_length=hop_length)
     plt.title(title)
@@ -84,12 +96,17 @@ def plot_spectrogram(data, title=None, fs=48000, n_fft=2048, hop_length=512, sav
     plt.tight_layout()
     if save == True:
         assert title != None, "please type title."
-        cd = os.path.abspath(".")
-        path = cd + "/output/" + title + ".png"
+        if output_path == None:
+            cd = pathlib.Path.cwd()
+            path = cd + "/output/" + title + ".png"
+        else:
+            title += ".png"
+            path = output_path / title
         plt.savefig(path)
     else:
         plt.show()
-    plt.clf()       #グラフの初期化、初期化しないとカラーバーが複数並ぶなどある
+    plt.clf()  # グラフの初期化、初期化しないとカラーバーが複数並ぶなどある
+
 
 def plot_ELVoice(el_path):
     assert os.path.isfile(el_path)
@@ -105,6 +122,7 @@ def plot_ELVoice(el_path):
 
     pass
 
+
 def remove_middleman_interval(intervals):
     if intervals.shape[0] == 1:
         return intervals
@@ -114,8 +132,10 @@ def remove_middleman_interval(intervals):
         interval[0, 1] = intervals[-1, 1]
         return interval
 
+
 def make_similer_voice():
     pass
+
 
 def preliminary_experiment(signal_path, noise_path):
     assert os.path.isfile(signal_path)
@@ -137,7 +157,6 @@ def preliminary_experiment(signal_path, noise_path):
     data = librosa.effects.remix(data, interval)
     # plot_spectrogram(data, save=False)
 
-
     plot_spectrogram(data, "natural voice_" + signal_name)
     plot_spectrogram(noise_data, "noise")
 
@@ -152,23 +171,63 @@ def preliminary_experiment(signal_path, noise_path):
     syth_nv_add_noise = spt.path2synth_voice(save_path + ".wav")
     plot_spectrogram(syth_nv_add_noise, "synth_nv_add_noise")
 
-
     # 後処理
     # spt.save_wav(add_signal, fs, "./output/ns100.014_add_noise")
     # add_signal = lpf(add_signal, )
 
     pass
 
+def save_plot(input_path, output_path):
+    # Todo 並列処理にしたい
+    for file in list(input_path.glob('**/*.wav')):
+        data, fs = spt.read_data(file)
+        plot_spectrogram(data, file.stem, output_path)
+
+def save_plot_synth(input_path, output_path):
+    # Todo 並列処理にしたい
+    for file in list(input_path.glob('**/*.wav')):
+        # data, fs = spt.read_data(file)
+        synthesized = spt.path2synth_voice(file)
+        title = file.stem + "_synthesized"
+        plot_spectrogram(synthesized, title, output_path)
+
+def create_plot_all(nv_dir, el_dir):
+    output_path = pathlib.Path.cwd()
+    output_nv_path = output_path / "output" / "nv_plot"
+    output_el_path = output_path / "output" / "el_plot"
+    output_el_synth_path = output_path / "output" / "el_synth_plot"
+
+    output_nv_path.mkdir(exist_ok=True)
+    output_el_path.mkdir(exist_ok=True)
+    output_el_synth_path.mkdir(exist_ok=True)
+
+    # save_plot(nv_dir, output_nv_path)
+    # save_plot(el_dir, output_el_path)
+    # save_plot_synth(el_dir, output_el_synth_path)
+
+
+
+    pass
+
 
 def main():
-    dataset_path = Path(__file__).parent
-    dataset_path /= "../../Datasets"
-    el_path = os.path.join(dataset_path, "el543mic/ne100.014.wav")
-    ns_path = os.path.join(dataset_path, "sp543mic/ns100.014.wav")
-    noise_path = os.path.join(dataset_path, "LPC_noise/ongen_14.wav")
+    # dataset_path = Path(__file__).parent.parent.parent
+    dataset_path = pathlib.Path.cwd().parent.parent
+    nv_dir = dataset_path / "Datasets" / "sp543mic"
+    el_dir = dataset_path / "Datasets" / "el543mic"
+
+    create_plot_all(nv_dir, el_dir)
+
+    pass
+
+
+    # el_path = os.path.join(dataset_path, "el543mic/ne100.014.wav")
+    # ns_path = os.path.join(dataset_path, "sp543mic/ns100.014.wav")
+    # noise_path = os.path.join(dataset_path, "LPC_noise/ongen_14.wav")
 
     # plot_ELVoice(el_path)
-    preliminary_experiment(ns_path, noise_path)
+    # preliminary_experiment(ns_path, noise_path)
+
 
 if __name__ == '__main__':
     main()
